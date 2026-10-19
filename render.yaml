@@ -1,0 +1,36 @@
+# Render Blueprint: API + worker as separate services sharing one managed Postgres.
+# Note: Render background workers and pre-deploy commands require a paid instance type.
+databases:
+  - name: webhooks-db
+    databaseName: webhooks
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: webhooks-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: webhooks-db
+          property: connectionString
+      - key: PROCESSING_DELAY_SECONDS
+        value: "30"
+
+  - type: worker
+    name: webhooks-worker
+    runtime: docker
+    plan: starter
+    dockerCommand: python -m app.worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: webhooks-db
+          property: connectionString
+      - key: PROCESSING_DELAY_SECONDS
+        value: "30"
+      - key: WORKER_CONCURRENCY
+        value: "10"
